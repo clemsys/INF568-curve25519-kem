@@ -1,0 +1,20 @@
+[package]
+name = "curve25519-kem"
+version = "0.1.0"
+edition = "2021"
+authors = ["Clément CHAPOT <clement.chapot@polytechnique.edu>"]
+description = "KEM derived from a basic ElGamal-style PKE using curve25519 by apply the FO transformation"
+readme = "README.md"
+repository = "https://github.com/clemsys/INF568-curve25519-KEM"
+license = "MIT OR Apache-2.0"
+categories = ["algorithms", "cryptography", "command-line-utilities"]
+
+[dependencies]
+clap = { version = "4.5.1", features = ["derive"] }
+crypto-bigint = "0.5.5"
+x25519-dalek = { version = "2.0.1", features = ["static_secrets", "getrandom"] }
+
+[profile.release]
+strip = true
+lto = true
+panic = "abort"
