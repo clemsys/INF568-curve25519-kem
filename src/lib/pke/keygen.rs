@@ -1,9 +1,14 @@
 use x25519_dalek::{PublicKey, StaticSecret};
 
-pub fn gen_sk() -> StaticSecret {
+fn gen_sk() -> StaticSecret {
     StaticSecret::random()
 }
 
-pub fn gen_pk(sk: &StaticSecret) -> PublicKey {
+fn gen_pk(sk: &StaticSecret) -> PublicKey {
     sk.into()
+}
+
+pub fn keygen() -> (PublicKey, StaticSecret) {
+    let sk = gen_sk();
+    (gen_pk(&sk), sk)
 }
