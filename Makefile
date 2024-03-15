@@ -4,8 +4,8 @@ build:
 	cargo build --release
 
 copy:
-	cp target/release/keygen .
+	cp target/release/{keygen,encaps,decaps} .
 
 clean:
 	cargo clean
-	rm keygen || true
+	rm keygen encaps decaps || true

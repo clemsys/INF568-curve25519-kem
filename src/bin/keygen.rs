@@ -1,6 +1,6 @@
 use clap::Parser;
 use curve25519_kem::lib::fo_kem::keygen;
-use std::fmt::Write;
+use curve25519_kem::lib::utils::hex_encode;
 
 #[derive(Parser, Debug)]
 #[command(version)]
@@ -9,18 +9,14 @@ struct Args {
     private_key_file: String,
 }
 
-fn hex_encode(bytes: &[u8]) -> String {
-    bytes.iter().fold(String::new(), |mut output, b| {
-        let _ = write!(output, "{b:02X}");
-        output
-    })
-}
-
 fn main() {
     let args = Args::parse();
 
     let (pk, sk) = keygen();
 
-    std::fs::write(args.private_key_file, sk.as_bytes()).unwrap();
+    std::fs::write(args.private_key_file, sk.as_bytes()).unwrap_or_else(|_| {
+        eprintln!("Error writing private key file");
+        std::process::exit(1);
+    });
     println!("{}", hex_encode(pk.as_bytes()));
 }

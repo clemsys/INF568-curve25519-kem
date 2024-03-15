@@ -11,8 +11,8 @@ pub struct ElGamalPlaintext<const N: usize>([u8; N]);
 impl<const N: usize> ElGamalCiphertext<N> {
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut c = Vec::with_capacity(N + 32);
-        c[..32].copy_from_slice(self.0.as_bytes());
-        c[32..].copy_from_slice(&self.1);
+        c.extend_from_slice(self.0.as_bytes());
+        c.extend_from_slice(&self.1);
         assert_eq!(c.len(), N + 32, "Invalid length for ElGamalCiphertext");
         c
     }

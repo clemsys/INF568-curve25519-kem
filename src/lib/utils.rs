@@ -6,6 +6,7 @@ use sha3::{
     digest::{ExtendableOutput, Update, XofReader},
     Shake128,
 };
+use std::fmt::Write;
 
 const NONCE: [u8; 12] = [0u8; 12]; // key expected to be chosen independently and uniformly at random for each message so it is safe to use a fixed nonce zero
 
@@ -25,4 +26,18 @@ pub(super) fn encrypt<const N: usize>(plaintext: &[u8; N], key: &[u8; 32]) -> [u
     let mut buffer = *plaintext;
     cipher.apply_keystream(&mut buffer);
     buffer
+}
+
+pub fn hex_encode(bytes: &[u8]) -> String {
+    bytes.iter().fold(String::new(), |mut output, b| {
+        let _ = write!(output, "{b:02X}");
+        output
+    })
+}
+
+pub fn hex_decode(hex: &str) -> Vec<u8> {
+    (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+        .collect()
 }

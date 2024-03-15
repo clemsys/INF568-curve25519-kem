@@ -81,7 +81,7 @@ pub fn encaps(public_key: &MontgomeryPoint) -> (ElGamalCiphertext<PLAINTEXT_LEN>
     let shared_key = {
         let mut d = [0u8; PLAINTEXT_LEN + G2_OUT_LEN]; // d = c || k
         d[..(PLAINTEXT_LEN + 32)].copy_from_slice(&c.as_bytes());
-        d[PLAINTEXT_LEN..].copy_from_slice(k);
+        d[(PLAINTEXT_LEN + 32)..].copy_from_slice(k);
         hash::<F_OUT_LEN>(&d)
     };
 
@@ -115,8 +115,8 @@ pub fn decaps(
 
     let k_1 = {
         let mut d = [0u8; PLAINTEXT_LEN + G2_OUT_LEN]; // d = c || s
-        d[..PLAINTEXT_LEN].copy_from_slice(&ciphertext.as_bytes());
-        d[PLAINTEXT_LEN..].copy_from_slice(&secret_key.s);
+        d[..(PLAINTEXT_LEN + 32)].copy_from_slice(&ciphertext.as_bytes());
+        d[(PLAINTEXT_LEN + 32)..].copy_from_slice(&secret_key.s);
         hash::<F_OUT_LEN>(&d)
     };
 
