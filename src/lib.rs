@@ -1,8 +1,5 @@
 pub mod lib {
-    pub mod kem {
-        pub mod keygen;
-    }
-    pub mod pke {
-        pub mod keygen;
-    }
+    pub mod elgamal_pke;
+    pub mod fo_kem;
+    mod utils;
 }

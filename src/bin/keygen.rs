@@ -1,8 +1,6 @@
 use clap::Parser;
-use curve25519_kem::lib::kem;
+use curve25519_kem::lib::fo_kem::keygen;
 use std::fmt::Write;
-
-// TODO : add description
 
 #[derive(Parser, Debug)]
 #[command(version)]
@@ -21,7 +19,7 @@ fn hex_encode(bytes: &[u8]) -> String {
 fn main() {
     let args = Args::parse();
 
-    let (pk, sk) = kem::keygen::keygen();
+    let (pk, sk) = keygen();
 
     std::fs::write(args.private_key_file, sk.as_bytes()).unwrap();
     println!("{}", hex_encode(pk.as_bytes()));
