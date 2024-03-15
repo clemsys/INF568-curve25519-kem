@@ -7,7 +7,7 @@ use sha3::{
     Shake128,
 };
 
-const NONCE: [u8; 12] = [0u8; 12]; // TODO: change nonce
+const NONCE: [u8; 12] = [0u8; 12]; // key expected to be chosen independently and uniformly at random for each message so it is safe to use a fixed nonce zero
 
 /// hash using shake128
 pub(super) fn hash<const N: usize>(bytes: &[u8]) -> [u8; N] {
@@ -22,7 +22,7 @@ pub(super) fn hash<const N: usize>(bytes: &[u8]) -> [u8; N] {
 /// encrypt/decrypt using chacha20
 pub(super) fn encrypt<const N: usize>(plaintext: &[u8; N], key: &[u8; 32]) -> [u8; N] {
     let mut cipher = ChaCha20::new(key.into(), &NONCE.into());
-    let mut buffer = plaintext.clone();
+    let mut buffer = *plaintext;
     cipher.apply_keystream(&mut buffer);
     buffer
 }

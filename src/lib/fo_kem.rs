@@ -1,4 +1,7 @@
-use super::{elgamal_pke, utils::hash};
+use super::{
+    elgamal_pke::{self, ElGamalCiphertext, ElGamalPlaintext},
+    utils::hash,
+};
 use curve25519_dalek::{MontgomeryPoint, Scalar};
 use rand::Rng;
 
@@ -7,19 +10,37 @@ const G1_OUT_LEN: usize = 32; // number of output bytes for G1
 const G2_OUT_LEN: usize = 64; // number of output bytes for G2, must be > 32
 const F_OUT_LEN: usize = 16; // number of output bytes for F, required to be 16 bytes
 const SECRET_LEN: usize = L_S + G1_OUT_LEN + 64; // in bytes
-const CIPHERTEXT_LEN: usize = 64; // in bytes, must be > 32
+const PLAINTEXT_LEN: usize = 64; // in bytes, must be > 32, add 32 for ElGamalCiphertext
 
-pub struct SecretKey(Scalar, [u8; L_S], MontgomeryPoint, [u8; G1_OUT_LEN]);
+// pub struct SecretKey(Scalar, [u8; L_S], MontgomeryPoint, [u8; G1_OUT_LEN]);
+pub struct SecretKey {
+    sk: Scalar,
+    s: [u8; L_S],
+    pk: MontgomeryPoint,
+    pkh: [u8; G1_OUT_LEN],
+}
 
 impl SecretKey {
     pub fn as_bytes(&self) -> [u8; SECRET_LEN] {
-        let mut bytes = Vec::with_capacity(SECRET_LEN);
+        let mut bytes = [0u8; SECRET_LEN];
         // add self.0, self.1, self.2, self.3 to bytes
-        bytes.extend_from_slice(self.0.as_bytes());
-        bytes.extend_from_slice(&self.1);
-        bytes.extend_from_slice(self.2.as_bytes());
-        bytes.extend_from_slice(&self.3);
-        bytes.try_into().unwrap()
+        bytes[..32].copy_from_slice(self.sk.as_bytes());
+        bytes[32..(L_S + 32)].copy_from_slice(&self.s);
+        bytes[(L_S + 32)..(L_S + 64)].copy_from_slice(self.pk.as_bytes());
+        bytes[(L_S + 64)..].copy_from_slice(&self.pkh);
+        bytes
+    }
+
+    pub fn from_bytes(bytes: [u8; SECRET_LEN]) -> Self {
+        let (sk, rest) = bytes.split_at(32);
+        let (s, rest) = rest.split_at(L_S);
+        let (pk, pkh) = rest.split_at(32);
+        SecretKey {
+            sk: Scalar::from_bytes_mod_order(sk.try_into().unwrap()),
+            s: s.try_into().unwrap(),
+            pk: MontgomeryPoint(pk.try_into().unwrap()),
+            pkh: pkh.try_into().unwrap(),
+        }
     }
 }
 
@@ -31,22 +52,22 @@ pub fn keygen() -> (MontgomeryPoint, SecretKey) {
         s
     };
     let pkh = hash(pk.as_bytes());
-    let sk2 = SecretKey(sk, s, pk, pkh);
+    let sk2 = SecretKey { sk, s, pk, pkh };
     (pk, sk2)
 }
 
-pub fn encaps(pk: &MontgomeryPoint) -> ([u8; CIPHERTEXT_LEN], [u8; F_OUT_LEN]) {
+pub fn encaps(public_key: &MontgomeryPoint) -> (ElGamalCiphertext<PLAINTEXT_LEN>, [u8; F_OUT_LEN]) {
     let m = {
-        let mut m = [0u8; CIPHERTEXT_LEN - 32];
+        let mut m = [0u8; PLAINTEXT_LEN];
         rand::thread_rng().fill(&mut m);
-        m
+        ElGamalPlaintext::from_bytes(m)
     };
 
     // compute (r || k) = G2(G1(pk) || m)
     let h1 = {
-        let mut h1 = [0u8; G1_OUT_LEN + CIPHERTEXT_LEN - 32];
-        h1[..G1_OUT_LEN].copy_from_slice(&hash::<G1_OUT_LEN>(pk.as_bytes()));
-        h1[G1_OUT_LEN..].copy_from_slice(&m);
+        let mut h1 = [0u8; G1_OUT_LEN + PLAINTEXT_LEN];
+        h1[..G1_OUT_LEN].copy_from_slice(&hash::<G1_OUT_LEN>(public_key.as_bytes()));
+        h1[G1_OUT_LEN..].copy_from_slice(&m.as_bytes());
         h1
     };
     let rk = hash::<G2_OUT_LEN>(&h1);
@@ -55,38 +76,29 @@ pub fn encaps(pk: &MontgomeryPoint) -> ([u8; CIPHERTEXT_LEN], [u8; F_OUT_LEN]) {
         (Scalar::from_bytes_mod_order(r.try_into().unwrap()), k)
     };
 
-    let c = {
-        let (c1, c2) = elgamal_pke::encaps(&m, pk, &r);
-        let mut c = [0u8; CIPHERTEXT_LEN];
-        c[..32].copy_from_slice(c1.as_bytes());
-        c[32..].copy_from_slice(&c2);
-        c
-    };
+    let c = elgamal_pke::encaps(&m, public_key, &r);
 
     let shared_key = {
-        let mut d = [0u8; CIPHERTEXT_LEN + G2_OUT_LEN - 32]; // d = c || k
-        d[..CIPHERTEXT_LEN].copy_from_slice(&c);
-        d[CIPHERTEXT_LEN..].copy_from_slice(k);
+        let mut d = [0u8; PLAINTEXT_LEN + G2_OUT_LEN]; // d = c || k
+        d[..(PLAINTEXT_LEN + 32)].copy_from_slice(&c.as_bytes());
+        d[PLAINTEXT_LEN..].copy_from_slice(k);
         hash::<F_OUT_LEN>(&d)
     };
 
     (c, shared_key)
 }
 
-pub fn decaps(sk: &SecretKey, ciphertext: [u8; CIPHERTEXT_LEN]) -> [u8; F_OUT_LEN] {
-    let m: [u8; CIPHERTEXT_LEN - 32] = elgamal_pke::decaps(
-        (
-            MontgomeryPoint(ciphertext[..32].try_into().unwrap()),
-            ciphertext[32..].try_into().unwrap(),
-        ),
-        &sk.0,
-    );
+pub fn decaps(
+    secret_key: &SecretKey,
+    ciphertext: ElGamalCiphertext<PLAINTEXT_LEN>,
+) -> [u8; F_OUT_LEN] {
+    let m: ElGamalPlaintext<PLAINTEXT_LEN> = elgamal_pke::decaps(&ciphertext, &secret_key.sk);
 
     // r || k = G2(pkh || m)
     let rk = {
-        let mut h1 = [0u8; G1_OUT_LEN + CIPHERTEXT_LEN - 32];
-        h1[..G1_OUT_LEN].copy_from_slice(&sk.3);
-        h1[G1_OUT_LEN..].copy_from_slice(&m);
+        let mut h1 = [0u8; G1_OUT_LEN + PLAINTEXT_LEN];
+        h1[..G1_OUT_LEN].copy_from_slice(&secret_key.pkh);
+        h1[G1_OUT_LEN..].copy_from_slice(&m.as_bytes());
         hash::<G2_OUT_LEN>(&h1)
     };
     let (r, k) = {
@@ -95,25 +107,22 @@ pub fn decaps(sk: &SecretKey, ciphertext: [u8; CIPHERTEXT_LEN]) -> [u8; F_OUT_LE
     };
 
     let k_0 = {
-        let mut d = [0u8; CIPHERTEXT_LEN + G2_OUT_LEN - 32]; // d = c || k
-        d[..CIPHERTEXT_LEN].copy_from_slice(&ciphertext);
-        d[CIPHERTEXT_LEN..].copy_from_slice(k);
+        let mut d = [0u8; PLAINTEXT_LEN + G2_OUT_LEN]; // d = c || k
+        d[..(PLAINTEXT_LEN + 32)].copy_from_slice(&ciphertext.as_bytes());
+        d[(PLAINTEXT_LEN + 32)..].copy_from_slice(k);
         hash::<F_OUT_LEN>(&d)
     };
 
     let k_1 = {
-        let mut d = [0u8; CIPHERTEXT_LEN + G2_OUT_LEN - 32]; // d = c || s
-        d[..CIPHERTEXT_LEN].copy_from_slice(&ciphertext);
-        d[CIPHERTEXT_LEN..].copy_from_slice(&sk.1);
+        let mut d = [0u8; PLAINTEXT_LEN + G2_OUT_LEN]; // d = c || s
+        d[..PLAINTEXT_LEN].copy_from_slice(&ciphertext.as_bytes());
+        d[PLAINTEXT_LEN..].copy_from_slice(&secret_key.s);
         hash::<F_OUT_LEN>(&d)
     };
 
     let condition = {
-        let (p, c) = elgamal_pke::encaps(&m, &sk.2, &r);
-        let mut bytes = [0u8; CIPHERTEXT_LEN];
-        bytes[..32].copy_from_slice(p.as_bytes());
-        bytes[32..].copy_from_slice(&c);
-        u8::from(bytes == ciphertext)
+        let c = elgamal_pke::encaps(&m, &secret_key.pk, &r);
+        u8::from(c == ciphertext)
     };
 
     // return k0 if condition else k1 in constant time
