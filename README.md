@@ -17,6 +17,23 @@ This calls `cargo build --release` and copies the three binaries `keygen`, `enca
 
 For more precise usage information, use `--help` on the relevant binary.
 
+## Testing
+
+Run `cargo test` to run the test written in `tests/fo_kem.rs`, that generates a key pair with `keygen`, encapsulates with `encaps`, then decapsulates with `decaps` and finally checks that the encapsulation and the decapsulation yielded the same symmetric key.
+
+This can also be run manually using the following instructions:
+
+### Instructions for a demo
+
+Run the following sequence of instructions:
+
+```
+./keygen private
+./encaps <stdout from previous command>
+./decaps private <1st line of stdout from previous command>
+# Check that the 2nd line of the stdout of ./encaps and the stdout of ./decaps are the same
+```
+
 ## Project structure
 
 The core of the project can be found in `src/lib/`.
